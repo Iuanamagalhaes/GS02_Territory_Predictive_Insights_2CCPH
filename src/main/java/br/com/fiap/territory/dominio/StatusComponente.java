@@ -1,4 +1,7 @@
 package br.com.fiap.territory.dominio;
 
-public class StatusComponente {
+public enum StatusComponente {
+    DESCONHECIDO,
+    OPERANDO,
+    INDISPONIVEL
 }
