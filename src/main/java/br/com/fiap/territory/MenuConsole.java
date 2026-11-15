@@ -10,11 +10,13 @@ import br.com.fiap.territory.dominio.TipoSensor;
 import br.com.fiap.territory.excecao.DadosInvalidosException;
 import br.com.fiap.territory.excecao.FonteIndisponivelException;
 import br.com.fiap.territory.servico.ConfiguracaoSistema;
+import br.com.fiap.territory.servico.ExportadorCsv;
 import br.com.fiap.territory.servico.ResultadoPrevisao;
 import br.com.fiap.territory.servico.ServicoMonitoramento;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-
+import java.io.IOException;
+import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -26,11 +28,14 @@ public class MenuConsole implements CommandLineRunner {
     private static final DateTimeFormatter FORMATO_DATA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     private final ServicoMonitoramento servico;
+    private final ExportadorCsv exportador;
     private final ConfiguracaoSistema configuracao;
     private Scanner scanner;
 
-    public MenuConsole(ServicoMonitoramento servico, ConfiguracaoSistema configuracao) {
+    public MenuConsole(ServicoMonitoramento servico, ExportadorCsv exportador,
+                       ConfiguracaoSistema configuracao) {
         this.servico = servico;
+        this.exportador = exportador;
         this.configuracao = configuracao;
     }
 
@@ -66,7 +71,6 @@ public class MenuConsole implements CommandLineRunner {
         }
     }
 
-
     private void imprimirCabecalho() {
         DadosTerritorio t = configuracao.getDadosTerritorio();
         System.out.println();
@@ -80,7 +84,7 @@ public class MenuConsole implements CommandLineRunner {
         System.out.println();
         System.out.println("1) Verificar sensores (ler e gravar medições)");
         System.out.println("2) Rodar previsões e alertas");
-        System.out.println("3) Ver histórico (medições / alertas)");
+        System.out.println("3) Ver histórico (medições / alertas / exportar CSV)");
         System.out.println("4) Gerenciar dados do território");
         System.out.println("5) Status completo");
         System.out.println("6) Registrar leitura manual");
@@ -146,9 +150,8 @@ public class MenuConsole implements CommandLineRunner {
             }
         }
         System.out.println();
-        System.out.println("Alertas emitidos e gravados nesta execucao: " + alertasEmitidos);
+        System.out.println("Alertas emitidos e gravados nesta execução: " + alertasEmitidos);
     }
-
 
     private void menuHistorico() {
         boolean voltar = false;
@@ -185,6 +188,16 @@ public class MenuConsole implements CommandLineRunner {
                     m.getValor(), m.getUnidade());
         }
         System.out.println("Exibindo " + ultimas.size() + " de " + total + " medição(ões).");
+
+        if (confirmar("Exportar o histórico COMPLETO deste sensor para CSV? (s/n): ")) {
+            try {
+                Path arquivo = exportador.exportarMedicoes(
+                        servico.buscarHistoricoPorSensor(sensor.getId()), sensor.getId());
+                System.out.println("Arquivo gerado: " + arquivo.toAbsolutePath());
+            } catch (IOException e) {
+                System.out.println("[ERRO] Não foi possível gravar o CSV: " + e.getMessage());
+            }
+        }
     }
 
     private void historicoAlertas() {
@@ -203,6 +216,15 @@ public class MenuConsole implements CommandLineRunner {
                     a.getEstrategia());
         }
         System.out.println("Exibindo " + limite + " de " + alertas.size() + " alerta(s).");
+
+        if (confirmar("Exportar TODOS os alertas para CSV? (s/n): ")) {
+            try {
+                Path arquivo = exportador.exportarAlertas(alertas);
+                System.out.println("Arquivo gerado: " + arquivo.toAbsolutePath());
+            } catch (IOException e) {
+                System.out.println("[ERRO] Não foi possível gravar o CSV: " + e.getMessage());
+            }
+        }
     }
 
     private void menuDadosTerritorio() {
@@ -285,7 +307,7 @@ public class MenuConsole implements CommandLineRunner {
             return;
         }
         sensor.simularFalha(sensor.estaFuncionando());
-        System.out.println("Sensor " + sensor.getId() + " agora esta: " + sensor.verificarStatus());
+        System.out.println("Sensor " + sensor.getId() + " agora está: " + sensor.verificarStatus());
     }
 
     private void exibirStatusCompleto() {
@@ -337,7 +359,7 @@ public class MenuConsole implements CommandLineRunner {
             return null;
         }
         if (indice < 1 || indice > sensores.size()) {
-            System.out.println("[DADO INVÁLIDO] Escolha um numero entre 1 e " + sensores.size() + ".");
+            System.out.println("[DADO INVÁLIDO] Escolha um número entre 1 e " + sensores.size() + ".");
             return null;
         }
         return sensores.get(indice - 1);
@@ -351,6 +373,10 @@ public class MenuConsole implements CommandLineRunner {
         return scanner.nextLine();
     }
 
+    private boolean confirmar(String prompt) {
+        return lerLinha(prompt).trim().equalsIgnoreCase("s");
+    }
+
     private Integer lerInteiro(String prompt, Integer padrao) {
         String texto = lerLinha(prompt).trim();
         if (texto.isEmpty()) {
@@ -362,7 +388,7 @@ public class MenuConsole implements CommandLineRunner {
         try {
             return Integer.parseInt(texto);
         } catch (NumberFormatException e) {
-            System.out.println("[DADO INVÁLIDO] '" + texto + "' não e um número inteiro.");
+            System.out.println("[DADO INVÁLIDO] '" + texto + "' não é um número inteiro.");
             return null;
         }
     }
@@ -372,7 +398,7 @@ public class MenuConsole implements CommandLineRunner {
         try {
             return Double.parseDouble(texto);
         } catch (NumberFormatException e) {
-            System.out.println("[DADO INVÁLIDO] '" + texto + "' não e um número válido.");
+            System.out.println("[DADO INVÁLIDO] '" + texto + "' não é um número válido.");
             return null;
         }
     }
